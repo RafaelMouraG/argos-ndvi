@@ -29,6 +29,7 @@ def _exportar(args: argparse.Namespace) -> None:
         max_nuvens_cena=args.max_nuvens_cena,
         max_mascarado_pct=args.max_mascarado,
         modo=args.zoneamento,
+        area_minima_ha=args.area_minima,
         talhao_id=args.id,
     )
     args.saida.mkdir(parents=True, exist_ok=True)
@@ -79,6 +80,10 @@ def main(argv: list[str] | None = None) -> int:
     exp.add_argument("--max-nuvens-cena", type=float, default=60.0)
     exp.add_argument("--max-mascarado", type=float, default=10.0)
     exp.add_argument("--zoneamento", choices=["absoluto", "relativo"], default="absoluto")
+    exp.add_argument(
+        "--area-minima", type=float, default=0.0, metavar="HA",
+        help="Absorve manchas de zona menores que essa área (ex.: 0.5). Padrão: 0 (desligado).",
+    )
     exp.add_argument("--id")
     exp.set_defaults(func=_exportar)
 

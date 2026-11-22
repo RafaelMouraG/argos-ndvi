@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import date
@@ -34,7 +35,14 @@ from argos.ndvi import (
     zonas_absolutas,
     zonas_relativas,
 )
-from argos.raster import Grade, calcular_grade, ler_banda, ler_scl, mascara_talhao
+from argos.raster import (
+    Grade,
+    calcular_grade,
+    filtrar_area_minima,
+    ler_banda,
+    ler_scl,
+    mascara_talhao,
+)
 
 ModoZoneamento = Literal["absoluto", "relativo"]
 
@@ -74,6 +82,9 @@ class Zoneamento:
     classes: np.ndarray
     zonas: list[Zona]
     codigo_baixo: int
+    area_minima_ha: float = 0.0
+    # Só no modo absoluto: teto da classe de baixo vigor
+    limite_baixo: float | None = None
 
 
 def validar_area(geom: BaseGeometry) -> tuple[float, Any]:
@@ -148,23 +159,60 @@ def zonear(
     limiares: tuple[float, float, float],
     tolerancia: float,
     mediana: float,
+    area_minima_ha: float = 0.0,
 ) -> Zoneamento:
     assert resultado.ndvi is not None and resultado.validos is not None
     ndvi = np.where(resultado.validos, resultado.ndvi, np.nan)
     if modo == "absoluto":
-        return Zoneamento(modo, classificar_absoluto(ndvi, limiares), zonas_absolutas(limiares), 1)
-    return Zoneamento(
-        modo,
-        classificar_relativo(ndvi, mediana, tolerancia),
-        zonas_relativas(mediana, tolerancia),
-        0,
+        classes = classificar_absoluto(ndvi, limiares)
+        zonas, codigo_baixo, limite_baixo = zonas_absolutas(limiares), 1, limiares[1]
+    else:
+        classes = classificar_relativo(ndvi, mediana, tolerancia)
+        zonas, codigo_baixo, limite_baixo = zonas_relativas(mediana, tolerancia), 0, None
+
+    if area_minima_ha > 0:
+        min_pixels = math.ceil(area_minima_ha / resultado.area_pixel_ha)
+        classes = filtrar_area_minima(classes, min_pixels)
+    return Zoneamento(modo, classes, zonas, codigo_baixo, area_minima_ha, limite_baixo)
+
+
+def _talhao_todo_baixo(zoneamento: Zoneamento, mediana: float) -> bool:
+    """Mediana na classe de baixo vigor ou abaixo: mais da metade do talhão está baixa."""
+    return zoneamento.limite_baixo is not None and mediana < zoneamento.limite_baixo
+
+
+def _alerta(
+    zonas: list[dict[str, Any]], zoneamento: Zoneamento, mediana: float, limiar_pct: float
+) -> str | None:
+    if _talhao_todo_baixo(zoneamento, mediana):
+        return None  # tratado como aviso de estádio, não como estresse localizado
+    baixo = next(
+        z for z, zona in zip(zonas, zoneamento.zonas, strict=True)
+        if zona.codigo == zoneamento.codigo_baixo
+    )
+    if baixo["percentual"] < limiar_pct:
+        return None
+    return (
+        f"{baixo['percentual']:.1f}% da área válida ({baixo['area_ha']:.2f} ha) está na "
+        f"classe {baixo['classe']}; recomenda-se vistoria em campo."
     )
 
 
 def _avisos(
-    stats: dict[str, float], pct_mascarado: float, area_vetorial: float, area_pixels: float
+    stats: dict[str, float],
+    zoneamento: Zoneamento,
+    pct_mascarado: float,
+    area_vetorial: float,
+    area_pixels: float,
 ) -> list[str]:
     avisos = []
+    if _talhao_todo_baixo(zoneamento, stats["mediana"]):
+        avisos.append(
+            f"NDVI mediano de {stats['mediana']:.2f}: mais da metade do talhão está abaixo "
+            f"de {zoneamento.limite_baixo:.2f}. Isso costuma indicar estádio inicial da "
+            "cultura (emergência, solo ou palhada aparentes), não estresse localizado. Use o "
+            "zoneamento relativo ou a série temporal para localizar diferenças."
+        )
     if pct_mascarado > 0:
         avisos.append(
             f"{pct_mascarado:.1f}% do talhão foi mascarado pela SCL (nuvem, sombra, cirrus "
@@ -200,15 +248,6 @@ def montar_relatorio(
     n_validos = int(resultado.validos.sum())
     zonas = resumir_zonas(zoneamento.classes, zoneamento.zonas, px_ha)
 
-    baixo = next(z for z, zona in zip(zonas, zoneamento.zonas, strict=True)
-                 if zona.codigo == zoneamento.codigo_baixo)
-    alerta = None
-    if baixo["percentual"] >= limiar_alerta_pct:
-        alerta = (
-            f"{baixo['percentual']:.1f}% da área válida ({baixo['area_ha']:.2f} ha) está na "
-            f"classe {baixo['classe']}; recomenda-se vistoria em campo."
-        )
-
     cena = resultado.cena
     return {
         "talhao_id": talhao_id,
@@ -224,9 +263,15 @@ def montar_relatorio(
         "area_mascarada_ha": round((n_dentro - n_validos) * px_ha, 2),
         "correcao_radiometrica": resultado.correcao,
         "estatisticas_ndvi": stats,
-        "zoneamento": {"modo": zoneamento.modo, "zonas": zonas},
-        "alerta": alerta,
-        "avisos": _avisos(stats, resultado.pct_mascarado_talhao, area_vetorial, n_dentro * px_ha),
+        "zoneamento": {
+            "modo": zoneamento.modo,
+            "area_minima_ha": zoneamento.area_minima_ha,
+            "zonas": zonas,
+        },
+        "alerta": _alerta(zonas, zoneamento, stats["mediana"], limiar_alerta_pct),
+        "avisos": _avisos(
+            stats, zoneamento, resultado.pct_mascarado_talhao, area_vetorial, n_dentro * px_ha
+        ),
         "atribuicao": f"Contém dados modificados do Copernicus Sentinel {cena.data.year}",
     }
 
@@ -242,6 +287,7 @@ def analisar(
     limiares: tuple[float, float, float] = (0.10, 0.30, 0.60),
     tolerancia: float = 0.15,
     limiar_alerta_pct: float = 10.0,
+    area_minima_ha: float = 0.0,
     talhao_id: str | None = None,
     provedor: Provedor | None = None,
 ) -> tuple[dict[str, Any], ResultadoCena, Zoneamento]:
@@ -262,7 +308,9 @@ def analisar(
         if valores.size == 0:
             continue
         stats = estatisticas(valores)
-        zoneamento = zonear(resultado, modo, limiares, tolerancia, stats["mediana"])
+        zoneamento = zonear(
+            resultado, modo, limiares, tolerancia, stats["mediana"], area_minima_ha
+        )
         relatorio = montar_relatorio(
             resultado, zoneamento, stats, area_vetorial, crs_area, talhao_id, limiar_alerta_pct
         )

@@ -18,7 +18,7 @@ pip install -e ".[dev]"
 pytest                      # testes com rasters sintéticos, sem rede
 ruff check .
 uvicorn argos.api:app --reload    # docs em http://localhost:8000/docs
-argos exportar exemplos/talhao_exemplo.geojson --saida saida/
+argos exportar exemplos/talhao_exemplo.geojson --saida saida/ --area-minima 0.5
 argos serie exemplos/talhao_exemplo.geojson --inicio 2026-10-01 --saida serie.csv
 ```
 
@@ -62,6 +62,14 @@ Não reverter sem discutir. Cada item tem um motivo técnico.
 8. **Zoneamento absoluto (limiares configuráveis, padrão 0,10 / 0,30 / 0,60) ou
    relativo à mediana do talhão.** Os limiares fixos dependem da cultura e do estádio.
 9. **Atribuição Copernicus em toda saída** (JSON, GeoTIFF e GeoJSON).
+10. **Alerta só para baixo vigor localizado.** No modo absoluto, se a mediana do talhão
+    cai na classe de baixo vigor (ou abaixo), o alerta é suprimido e vira aviso de
+    estádio provável. Motivo: o Lote 04 real, em 19/11/2026, deu NDVI mediano 0,25 e 87%
+    em baixo vigor por ser lavoura em emergência, não por estresse.
+11. **Filtro de área mínima opcional (`area_minima_ha`, padrão 0).** Usa
+    `rasterio.features.sieve` com conectividade 4 sobre as classes; pixels inválidos não
+    participam. Afeta as áreas das zonas no relatório e no GeoJSON, não as estatísticas.
+    No talhão real, 0,5 ha reduziu de cerca de 100 para 2 a 4 polígonos por zona.
 
 ## Testes
 
@@ -71,6 +79,8 @@ Não reverter sem discutir. Cada item tem um motivo técnico.
 no pipeline devem manter os valores esperados ou justificar a alteração.
 
 ## Convenções
+
+- Polígonos reais de talhões ficam em `talhoes/`, que o git ignora. O repo é público.
 
 - Código, mensagens de erro e documentação em português.
 - Não usar travessão (—) em textos e documentação.

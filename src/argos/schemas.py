@@ -35,6 +35,10 @@ class AnaliseRequisicao(_BaseTalhao):
     limiares: tuple[float, float, float] = (0.10, 0.30, 0.60)
     tolerancia_relativa: float = Field(default=0.15, gt=0, lt=1)
     limiar_alerta_pct: float = Field(default=10.0, ge=0, le=100)
+    area_minima_ha: float = Field(
+        default=0.0, ge=0, le=20,
+        description="Manchas de zona menores que isso são absorvidas pela vizinha. 0 desliga.",
+    )
 
     @field_validator("limiares")
     @classmethod
@@ -89,6 +93,7 @@ class ZonaResumo(BaseModel):
 
 class ZoneamentoResposta(BaseModel):
     modo: Literal["absoluto", "relativo"]
+    area_minima_ha: float
     zonas: list[ZonaResumo]
 
 

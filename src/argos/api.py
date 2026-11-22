@@ -79,6 +79,7 @@ def analisar(req: AnaliseRequisicao) -> dict:
         limiares=req.limiares,
         tolerancia=req.tolerancia_relativa,
         limiar_alerta_pct=req.limiar_alerta_pct,
+        area_minima_ha=req.area_minima_ha,
         talhao_id=req.talhao_id,
     )
     return relatorio

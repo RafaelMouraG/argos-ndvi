@@ -9,5 +9,8 @@ build/
 dist/
 
 # Saídas de exportação
-saida/
+saida*/
+
+# Polígonos reais de talhões (coordenadas de propriedades) ficam fora do repo
+talhoes/
 *.tif

@@ -69,6 +69,7 @@ def criar_cena(
     data: datetime,
     *,
     nuvem_total: bool = False,
+    todo_baixo: bool = False,
     raster_bands: bool = True,
     baseline: str = "05.11",
 ) -> CenaSintetica:
@@ -76,8 +77,9 @@ def criar_cena(
     red = np.full((N10, N10), 1500, dtype=np.uint16)
     nir = np.full((N10, N10), 5500, dtype=np.uint16)
     linhas = slice(LIN_TALHAO, LIN_TALHAO + LADO_TALHAO)
-    red[linhas, COLS_BAIXO] = 2000
-    nir[linhas, COLS_BAIXO] = 2800
+    colunas_baixo = slice(None) if todo_baixo else COLS_BAIXO
+    red[linhas, colunas_baixo] = 2000
+    nir[linhas, colunas_baixo] = 2800
 
     scl = np.full((N10 // 2, N10 // 2), 4, dtype=np.uint8)
     if nuvem_total:

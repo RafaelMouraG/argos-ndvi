@@ -67,3 +67,18 @@ def test_resumo_de_zonas_em_hectares():
         "classe": "baixo_vigor", "faixa": "0.10 a 0.30", "area_ha": 0.02, "percentual": 40.0,
     }
     assert por_classe["alto_vigor"]["percentual"] == 60.0
+
+
+def test_filtro_de_area_minima_preserva_invalidos():
+    from argos.raster import filtrar_area_minima
+
+    classes = np.full((10, 10), 2, dtype=np.int8)
+    classes[2, 2] = 1  # mancha de 1 pixel
+    classes[5:8, 5:8] = 1  # mancha de 9 pixels
+    classes[0, :] = CLASSE_INVALIDA
+    filtradas = filtrar_area_minima(classes, 4)
+    assert filtradas[2, 2] == 2
+    assert (filtradas[5:8, 5:8] == 1).all()
+    assert (filtradas[0, :] == CLASSE_INVALIDA).all()
+    assert filtradas.dtype == np.int8
+    assert filtrar_area_minima(classes, 1) is classes

@@ -127,3 +127,26 @@ def _dentro_da_grade(resultado, linha_cena: int, coluna_cena: int):
     """Converte linha e coluna da cena (10 m) para índices da janela recortada."""
     janela = resultado.grade.janela_bandas
     return int(linha_cena - janela.row_off), int(coluna_cena - janela.col_off)
+
+
+def test_talhao_todo_baixo_vira_aviso_de_estadio(fabrica_cena, catalogo_falso, talhao_wgs84):
+    """Talhão inteiro com NDVI baixo (ex.: emergência) não deve mandar vistoriar tudo."""
+    catalogo_falso([fabrica_cena(todo_baixo=True).item])
+    relatorio, _, _ = analise.analisar(talhao_wgs84, INICIO, FIM)
+    zonas = {z["classe"]: z for z in relatorio["zoneamento"]["zonas"]}
+    assert zonas["baixo_vigor"]["percentual"] == 100.0
+    assert relatorio["alerta"] is None
+    assert any("estádio inicial" in aviso for aviso in relatorio["avisos"])
+
+
+def test_area_minima_absorve_manchas(fabrica_cena, catalogo_falso, talhao_wgs84):
+    # A faixa de baixo vigor tem 16 ha: resiste a 10 ha e é absorvida com 20 ha
+    catalogo_falso([fabrica_cena().item])
+    for area_minima, esperado in ((10.0, 16.0), (20.0, 0.0)):
+        relatorio, _, zoneamento = analise.analisar(
+            talhao_wgs84, INICIO, FIM, area_minima_ha=area_minima
+        )
+        zonas = {z["classe"]: z for z in relatorio["zoneamento"]["zonas"]}
+        assert zonas["baixo_vigor"]["area_ha"] == esperado
+        assert relatorio["zoneamento"]["area_minima_ha"] == area_minima
+        assert int((zoneamento.classes >= 0).sum()) == 6300  # válidos preservados

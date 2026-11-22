@@ -54,7 +54,7 @@ Campos principais da resposta:
 | `correcao_radiometrica` | Escala e offset aplicados para converter DN em reflectância |
 | `estatisticas_ndvi` | Média, mediana, mínimo, máximo, desvio padrão, p10 e p90 |
 | `zoneamento.zonas` | Área e percentual de cada classe de vigor |
-| `alerta` | Preenchido quando a classe de baixo vigor passa de `limiar_alerta_pct` |
+| `alerta` | Preenchido quando a classe de baixo vigor passa de `limiar_alerta_pct`. No modo absoluto, se a mediana do talhão já está em baixo vigor, o alerta é suprimido e vira aviso de estádio inicial |
 | `avisos` | Saturação do NDVI, efeito de borda, área mascarada |
 
 ## Linha de comando
@@ -62,10 +62,13 @@ Campos principais da resposta:
 Gera os arquivos para montar o mapa temático no QGIS:
 
 ```bash
-argos exportar exemplos/talhao_exemplo.geojson --inicio 2026-10-20 --fim 2026-11-20 --saida saida/
+argos exportar exemplos/talhao_exemplo.geojson --inicio 2026-10-20 --fim 2026-11-20 \
+  --saida saida/ --zoneamento relativo --area-minima 0.5
 ```
 
-Saída: `ndvi_<data>.tif` (float32 no SRC da cena), `zonas_<data>.geojson` (WGS84) e
+`--area-minima` absorve manchas de zona menores que a área informada (em hectares) pela
+classe vizinha dominante, o que remove o efeito "sal e pimenta" da classificação pixel a
+pixel. Saída: `ndvi_<data>.tif` (float32 no SRC da cena), `zonas_<data>.geojson` (WGS84) e
 `relatorio_<data>.json`.
 
 ```bash
@@ -87,6 +90,9 @@ perto de Luís Eduardo Magalhães (BA), só para teste.
 5. Lê B04 e B08, aplica escala e offset do `raster:bands` e calcula o NDVI só nos
    pixels válidos.
 6. Calcula estatísticas, classifica as zonas e converte a contagem de pixels em hectares.
+
+Guarde os polígonos reais em `talhoes/`: a pasta é ignorada pelo git para que as
+coordenadas das propriedades não vão para o repositório.
 
 Variáveis de ambiente: `ARGOS_PROVEDOR`, `ARGOS_MAX_AREA_HA`, `ARGOS_MAX_WORKERS`,
 `ARGOS_MAX_CENAS_SERIE`.

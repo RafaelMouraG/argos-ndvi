@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 import numpy as np
 from affine import Affine
-from rasterio.features import geometry_mask
+from rasterio.features import geometry_mask, sieve
 from rasterio.io import DatasetReader
 from rasterio.windows import Window
 from shapely.geometry import mapping
@@ -94,6 +94,19 @@ def ler_scl(ds_scl: DatasetReader, grade: Grade) -> np.ndarray:
         # Vizinho mais próximo exato: cada pixel de 20 m vira um bloco 2 x 2
         scl = np.repeat(np.repeat(scl, grade.fator_scl, axis=0), grade.fator_scl, axis=1)
     return scl
+
+
+def filtrar_area_minima(classes: np.ndarray, min_pixels: int) -> np.ndarray:
+    """Absorve manchas menores que min_pixels pela classe vizinha dominante.
+
+    Remove o efeito "sal e pimenta" da classificação pixel a pixel. Pixels inválidos
+    (classe negativa) não participam e continuam inválidos.
+    """
+    if min_pixels <= 1:
+        return classes
+    validos = classes >= 0
+    filtradas = sieve(classes.astype(np.int16), size=min_pixels, mask=validos)
+    return np.where(validos, filtradas, classes).astype(classes.dtype)
 
 
 def ler_banda(ds: DatasetReader, grade: Grade) -> np.ndarray:
