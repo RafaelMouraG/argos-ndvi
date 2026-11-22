@@ -1,0 +1,39 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "talhao_id": "exemplo-01",
+        "observacao": "Polígono fictício perto de Luís Eduardo Magalhães (BA), apenas para teste."
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -45.799477,
+              -12.102363
+            ],
+            [
+              -45.791941,
+              -12.101842
+            ],
+            [
+              -45.792292,
+              -12.096234
+            ],
+            [
+              -45.799002,
+              -12.096938
+            ],
+            [
+              -45.799477,
+              -12.102363
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}
